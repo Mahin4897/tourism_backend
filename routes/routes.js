@@ -206,4 +206,4 @@ router.post("/resetpassword", async (req, res) => {
     res.status(200).json({ message: "Password reset successful." });
   });
 
-module.exports=router
+module.exports=router;
