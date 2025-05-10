@@ -121,7 +121,9 @@ router.post('/resetrequest',async (req,res)=>{
 router.post("/resetpassword",async(req,res)=>{
      const rotp=req.body.otp
      const password=req.body.password
-     const isotp=await otp.findOne({where:{otp:rotp}})
+     const isotp=await otp.findOne({where:{otp:rotp},
+        having: literal('TIMESTAMPDIFF(MINUTE, createdAt, NOW()) <= 5')
+    })
      const email= isotp.email
      const isuser=await user.findOne({where:{email:email}})
      if(isotp!=null){
@@ -137,5 +139,16 @@ router.post("/resetpassword",async(req,res)=>{
 
 
 })
+
+// router.get("/mail",async(req,res)=>{
+//     const info = await transporter.sendMail({
+//         to: "marufrahmanmahin@protonmail.com", // list of receivers
+//         subject: "otp", // Subject line
+//         text: "otp", // plain text body
+//         html: "<h1>Test</h1>", // html body
+//       });
+
+
+// })
 
 module.exports=router
