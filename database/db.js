@@ -34,8 +34,17 @@ const user = sequelizedb.define('user', {
         type: DataTypes.STRING,
         allowNull: false,
         defaultValue:"guest",
-
-    }
+    },
+    isActive: {
+    type: Sequelize.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
+    isvalid: {
+    type: Sequelize.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
 });
 const token=sequelizedb.define('token',{
     token: {
