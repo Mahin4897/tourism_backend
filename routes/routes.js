@@ -143,7 +143,8 @@ router.get("/refresh", async (req, res) => {
 router.post("/logout", async (req, res) => {
   const cookie=req.cookies
   const rtoken = cookie.refreshtoken;
-  const istoken = token.findOne({ where: { token: rtoken } });
+  if (rtoken != null) {
+       const istoken = token.findOne({ where: { token: rtoken } });
   if (istoken != null) {
     await token.destroy({ where: { token: rtoken } });
     res.clearCookie("refreshtoken", {
@@ -160,7 +161,11 @@ router.post("/logout", async (req, res) => {
   } else {
     res.status(400).json({ message: "token invalid" });
   }
-});
+}else{
+  res.status(400).json({message:"unathorized"})
+}
+}
+);
 
 router.post("/resetrequest", async (req, res) => {
   const email = req.body.email;
