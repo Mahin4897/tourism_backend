@@ -206,8 +206,27 @@ router.post("/resetpassword", async (req, res) => {
   }
 });
 
-router.get("/profile",auth,(req,res)=>{
+router.get("/profile",auth,async(req,res)=>{
+  const isuser = await user.findOne({
+    where: {
+      email: req.decoded,
+      
+    },
+  });
+data={
+    first_name:isuser.first_name,
+    last_name:isuser.last_name,
+    email:isuser.email,
+    phone:isuser.phone,
+    usertype:isuser.usertype,
+    isActive:isuser.isActive,
+    isvalid:isuser.isvalid,
+    createdAt:isuser.createdAt,
+    updatedAt:isuser.updatedAt,
+    id:isuser.id
+}
   res.json({message:"profile",
+    data:data
   })
 
 })
