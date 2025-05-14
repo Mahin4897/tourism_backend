@@ -34,7 +34,7 @@ router.post("/register", async (req, res) => {
       otp: ot,
       email: req.body.email,
     });
-    const link = `localhost:3000/${ot}`;
+    const link = `localhost:3000/verify/${ot}`;
     const info = await transporter.sendMail({
       to: req.body.email, // list of receivers
       subject: "Verify your Email", // Subject line
@@ -48,7 +48,7 @@ router.post("/register", async (req, res) => {
     console.log(isuser.email);
   }
 });
-router.get("/:otp",async(req,res)=>{
+router.get("/verify/:otp",async(req,res)=>{
   const rotp =req.params['otp']
   const isotp = await otp.findOne({
     where: { otp: rotp }
@@ -106,12 +106,12 @@ router.post("/login", async (req, res) => {
     }
   }
 });
-router.post("/refresh", async (req, res) => {
+router.get("/refresh", async (req, res) => {
   const cookie = req.cookies;
-  const rtoken = cookie.refreshtoken;
-  if (rtoken != null) {
+  const retoken = cookie.refreshtoken;
+  if (retoken != null) {
     const rtoken = await token.findOne({
-      where: { token: req.body.refreshtoken },
+      where: { token: retoken },
     });
     console.log(rtoken);
     if (rtoken == null) {
@@ -131,10 +131,13 @@ router.post("/refresh", async (req, res) => {
               sameSite: "Strict", // Adjust as needed
               maxAge: 15 * 60 * 1000, // 15 minutes
             });
+            res.status(200).json({ message: "token refreshed" });
           }
         }
       );
     }
+  }else{
+    res.status(400).json({message:"unathorized"})
   }
 });
 router.post("/logout", async (req, res) => {
@@ -203,6 +206,11 @@ router.post("/resetpassword", async (req, res) => {
   }
 });
 
+router.get("/profile",auth,(req,res)=>{
+  res.json({message:"profile",
+  })
+
+})
 // router.get("/mail",async(req,res)=>{
 //     const info = await transporter.sendMail({
 //         to: "marufrahmanmahin@protonmail.com", // list of receivers
