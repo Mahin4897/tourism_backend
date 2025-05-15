@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 require("dotenv").config();
 const body_parser = require("body-parser");
 const { user, token, otp } = require("../database/db");
-const { accesstoken, refreshtoken, auth } = require("../middleware/auth");
+const { accesstoken, refreshtoken, auth,adminauth } = require("../middleware/auth");
 const otpGenerator = require("otp-generator");
 const transporter = require("../functions/nodemail");
 const { Cookies } = require("nodemailer/lib/fetch");
@@ -113,12 +113,11 @@ router.get("/refresh", async (req, res) => {
     const rtoken = await token.findOne({
       where: { token: retoken },
     });
-    console.log(rtoken);
     if (rtoken == null) {
       res.status(400).json({ message: "unathorized" });
     } else {
       jwt.verify(
-        req.body.refreshtoken,
+        retoken,
         process.env.JWT_SECRET,
         (err, decoded) => {
           if (err) {
@@ -212,29 +211,50 @@ router.post("/resetpassword", async (req, res) => {
 });
 
 router.get("/profile",auth,async(req,res)=>{
+  try{
   const isuser = await user.findOne({
     where: {
       email: req.decoded,
-      
+      attributes: { exclude: ["password"] },
     },
   });
-data={
-    first_name:isuser.first_name,
-    last_name:isuser.last_name,
-    email:isuser.email,
-    phone:isuser.phone,
-    usertype:isuser.usertype,
-    isActive:isuser.isActive,
-    isvalid:isuser.isvalid,
-    createdAt:isuser.createdAt,
-    updatedAt:isuser.updatedAt,
-    id:isuser.id
-}
-  res.json({message:"profile",
-    data:data
-  })
+    if(isuser!=null){
+      res.status(200).json({message:"profile",data:isuser})
+    }
+  }catch(err){
+    res.status(400).json({message:"failed"})
+  }
+  
 
 })
+router.get("/users",adminauth,async(req,res)=>{
+  try{
+    const users = await user.findAll({
+      attributes: { exclude: ["password"] },
+    });
+    res.status(200).json({message:"users",data:users})
+  }catch(err){
+    res.status(400).json({message:"failed"})
+  }
+})
+router.post("/deleteuser/:id",adminauth,async(req,res)=>{
+  const id=req.params.id
+  try{
+    const isuser=await user.findOne({where:{id:id}})
+    if(isuser!=null){
+      await user.destroy({where:{id:id}})
+      res.status(200).json({message:"user deleted"})
+    }else{
+      res.status(400).json({message:"user not found"})
+    }
+  }catch(err){
+    res.status(400).json({message:"failed"})
+  }
+})
+
+
+
+
 // router.get("/mail",async(req,res)=>{
 //     const info = await transporter.sendMail({
 //         to: "marufrahmanmahin@protonmail.com", // list of receivers
