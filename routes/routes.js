@@ -116,30 +116,38 @@ router.get("/refresh", async (req, res) => {
     if (rtoken == null) {
       res.status(400).json({ message: "unathorized" });
     } else {
-      jwt.verify(
-        retoken,
-        process.env.JWT_SECRET,
-        (err, decoded) => {
-          if (err) {
-            res.status(400).json({ message: "invalid token" });
-          } else {
-            const atoken = accesstoken(decoded.email);
-            res.cookie("accesstoken", atoken, {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === "production", // Set to true if using HTTPS
-              sameSite: "Strict", // Adjust as needed
-              maxAge: 15 * 60 * 1000, // 15 minutes
-            });
-            res.status(200).json({ message: "token refreshed" });
-          }
+      jwt.verify(retoken, process.env.JWT_SECRET, async (err, decoded) => {
+        if (err) {
+          res.status(400).json({ message: "invalid token" });
+        } else {
+          await token.destroy({ where: { token: retoken } });
+          const atoken = accesstoken(decoded.email);
+          const rtken = refreshtoken(decoded.email);
+          res.cookie("accesstoken", atoken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production", // Set to true if using HTTPS
+            sameSite: "Strict", // Adjust as needed
+            maxAge: 15 * 60 * 1000, // 15 minutes
+          });
+          res.cookie("refreshtoken", rtken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production", // Set to true if using HTTPS
+            sameSite: "Strict", // Adjust as needed
+            maxAge: 60 * 60 * 24 * 15, // 15 Days
+          });
+
+          const rtk =await token.create({
+            token: rtken,
+          });
+          res.status(200).json({ message: "token refreshed" });
         }
-      );
+      });
     }
-  }else{
-    res.status(400).json({message:"unathorized"})
+  } else {
+    res.status(400).json({ message: "unathorized" });
   }
 });
-router.post("/logout", async (req, res) => {
+router.get("/logout", async (req, res) => {
   const cookie=req.cookies
   const rtoken = cookie.refreshtoken;
   if (rtoken != null) {
