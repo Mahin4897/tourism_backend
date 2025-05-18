@@ -3,10 +3,10 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const cookieParser = require("cookie-parser");
-
 require("dotenv").config();
 const body_parser = require("body-parser");
 const { user, token, otp } = require("../database/db");
+const { getuser, gettoken, getotp } = require("../functions/dbqueries");
 const { accesstoken, refreshtoken, auth,adminauth } = require("../middleware/auth");
 const otpGenerator = require("otp-generator");
 const transporter = require("../functions/nodemail");
@@ -15,9 +15,20 @@ require("dotenv").config();
 router.use(body_parser.json());
 router.use(cookieParser());
 
+/**
+ * Handles user registration by creating a new user account
+ * @route POST /register
+ * @param {Object} req.body - User registration details
+ * @param {string} req.body.first_name - User's first name
+ * @param {string} req.body.last_name - User's last name
+ * @param {string} req.body.email - User's email address
+ * @param {string} req.body.password - User's password
+ * @param {string} req.body.phone - User's phone number
+ * @returns {Object} 200 status with success message if user created, 400 status if user already exists
+ */
 router.post("/register", async (req, res) => {
   console.log(req.body.first_name);
-  const isuser = await user.findOne({ where: { email: req.body.email } });
+  const isuser = await getuser(req.body.email);
   if (isuser === null) {
     const us = user.create({
       first_name: req.body.first_name,
@@ -48,13 +59,22 @@ router.post("/register", async (req, res) => {
     console.log(isuser.email);
   }
 });
+
+
+/**
+ * Handles user email verification via OTP
+ * @route GET /verify/:otp
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {string} req.params.otp - One-time verification code
+ * @returns {Object} 200 status with success message if user verified, otherwise failure message
+ * @description Validates user's email by checking OTP and updating user's validation status
+ */
 router.get("/verify/:otp",async(req,res)=>{
   const rotp =req.params['otp']
-  const isotp = await otp.findOne({
-    where: { otp: rotp }
-  });
+  const isotp = await getotp(rotp);
   const email = isotp.email;
-  const isuser = await user.findOne({ where: { email: email } });
+  const isuser = await getuser(email);
   if (isotp != null) {
     if (isuser != null) {
       isuser.isvalid=true
@@ -106,13 +126,12 @@ router.post("/login", async (req, res) => {
     }
   }
 });
+
 router.get("/refresh", async (req, res) => {
   const cookie = req.cookies;
   const retoken = cookie.refreshtoken;
   if (retoken != null) {
-    const rtoken = await token.findOne({
-      where: { token: retoken },
-    });
+    const rtoken = await gettoken(retoken);
     if (rtoken == null) {
       res.status(400).json({ message: "unathorized" });
     } else {
@@ -151,7 +170,7 @@ router.get("/logout", async (req, res) => {
   const cookie=req.cookies
   const rtoken = cookie.refreshtoken;
   if (rtoken != null) {
-       const istoken = token.findOne({ where: { token: rtoken } });
+       const istoken = gettoken(rtoken);
   if (istoken != null) {
     await token.destroy({ where: { token: rtoken } });
     res.clearCookie("refreshtoken", {
@@ -180,8 +199,8 @@ router.post("/resetrequest", async (req, res) => {
     upperCaseAlphabets: false,
     specialChars: false,
   });
-  const isuser = user.findOne({ where: { email: email } });
-  const isotp = otp.findOne({ where: { otp: ot } });
+  const isuser = await getuser(email);
+  const isotp = await getotp(ot);
   if (isotp != null) {
     if (isuser != null) {
       const otp1 = otp.create({
@@ -205,7 +224,7 @@ router.post("/resetpassword", async (req, res) => {
     having: literal("TIMESTAMPDIFF(MINUTE, createdAt, NOW()) <= 5"),
   });
   const email = isotp.email;
-  const isuser = await user.findOne({ where: { email: email } });
+  const isuser = await getuser(email);
   if (isotp != null) {
     if (isuser != null) {
       (isuser.password = bcrypt.hashSync(password, 10)),
@@ -220,12 +239,7 @@ router.post("/resetpassword", async (req, res) => {
 
 router.get("/profile",auth,async(req,res)=>{
   try{
-  const isuser = await user.findOne({
-    where: {
-      email: req.decoded,
-      attributes: { exclude: ["password"] },
-    },
-  });
+  const isuser = await getuser(req.body.email)
     if(isuser!=null){
       res.status(200).json({message:"profile",data:isuser})
     }
