@@ -6,7 +6,7 @@ const cookieParser = require("cookie-parser");
 require("dotenv").config();
 const body_parser = require("body-parser");
 const { user, token, otp } = require("../database/db");
-const { getuser, gettoken, getotp } = require("../functions/dbqueries");
+const { getuser, gettoken, getotp , getuserbyid,getallusers,getvalidusers} = require("../functions/dbqueries");
 const { accesstoken, refreshtoken, auth,adminauth } = require("../middleware/auth");
 const otpGenerator = require("otp-generator");
 const transporter = require("../functions/nodemail");
@@ -89,12 +89,7 @@ router.get("/verify/:otp",async(req,res)=>{
 
 router.post("/login", async (req, res) => {
   console.log(req.body.email)
-  const isuser = await user.findOne({
-    where: {
-      email: req.body.email,
-      isvalid: true,
-    },
-  });
+  const isuser = await getvalidusers(req.body.email);
   if (isuser === null) {
     res.status(400).json({ message: "user not found" });
   } else {
@@ -251,10 +246,12 @@ router.get("/profile",auth,async(req,res)=>{
 })
 router.get("/users",adminauth,async(req,res)=>{
   try{
-    const users = await user.findAll({
-      attributes: { exclude: ["password"] },
-    });
+    const users = await getallusers()
+    if(users!=null){
     res.status(200).json({message:"users",data:users})
+  }else{
+    res.status(400).json({message:"failed"})
+  }
   }catch(err){
     res.status(400).json({message:"failed"})
   }
@@ -262,7 +259,7 @@ router.get("/users",adminauth,async(req,res)=>{
 router.post("/deleteuser/:id",adminauth,async(req,res)=>{
   const id=req.params.id
   try{
-    const isuser=await user.findOne({where:{id:id}})
+    const isuser=await getuserbyid(id)
     if(isuser!=null){
       await user.destroy({where:{id:id}})
       res.status(200).json({message:"user deleted"})
