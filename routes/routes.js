@@ -5,6 +5,8 @@ const bcrypt = require("bcrypt");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
 const body_parser = require("body-parser");
+const { body, validationResult } = require('express-validator');
+const xss = require('xss');
 const { user, token, otp } = require("../database/db");
 const { getuser, gettoken, getotp , getuserbyid,getallusers,getvalidusers} = require("../functions/dbqueries");
 const { accesstoken, refreshtoken, auth,adminauth } = require("../middleware/auth");
@@ -26,16 +28,27 @@ router.use(cookieParser());
  * @param {string} req.body.phone - User's phone number
  * @returns {Object} 200 status with success message if user created, 400 status if user already exists
  */
-router.post("/register", async (req, res) => {
-  console.log(req.body.first_name);
+router.post("/register", [body('first_name').trim().notEmpty().withMessage("First Name Required")
+  .isLength({ min: 3 }).withMessage("First Name must be at least 3 characters long"),
+  body('last_name').trim().notEmpty().withMessage("Last Name Required")
+  .isLength({ min: 3 }).withMessage("Last Name must be at least 3 characters long"),
+  body('email').trim().notEmpty().withMessage("Email Required").isEmail().withMessage("Invalid Email").normalizeEmail(),
+  body('password').isLength({ min: 8 }).withMessage("Password must be at least 8 characters long"),
+  body('phone').trim().notEmpty().withMessage("Phone Number Required")
+  .isMobilePhone('bn-BD').withMessage("Invalid Phone Number")
+],async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
   const isuser = await getuser(req.body.email);
   if (isuser === null) {
     const us = user.create({
-      first_name: req.body.first_name,
-      last_name: req.body.last_name,
-      email: req.body.email,
-      password: bcrypt.hashSync(req.body.password, 10),
-      phone: req.body.phone,
+      first_name: xss(req.body.first_name),
+      last_name: xss(req.body.last_name),
+      email: xss(req.body.email),
+      password: bcrypt.hashSync(xss(req.body.password), 10),
+      phone: xss(req.body.phone),
     });
     const ot = otpGenerator.generate(6, {
       upperCaseAlphabets: false,
@@ -87,14 +100,22 @@ router.get("/verify/:otp",async(req,res)=>{
   }
 })
 
-router.post("/login", async (req, res) => {
-  console.log(req.body.email)
-  const isuser = await getvalidusers(req.body.email);
+router.post("/login",[body('email').trim().notEmpty().withMessage("Email is required")
+  .isEmail().withMessage("Invalid Email").normalizeEmail(),
+  body('password').trim().notEmpty().withMessage("Passowrd is required")
+  .isLength({ min: 8 }).withMessage("Password must be at least 8 characters long")
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  const email=xss(req.body.email);
+  const password=xss(req.body.password);
+  const isuser = await getvalidusers(email);
   if (isuser === null) {
     res.status(400).json({ message: "user not found" });
   } else {
-    const ismatch = bcrypt.compareSync(req.body.password, isuser.password);
-    console.log(isuser.email);
+    const ismatch = bcrypt.compareSync(password, isuser.password);
     if (ismatch) {
       const rtoken = refreshtoken(isuser.email);
       const atoken = accesstoken(isuser.email);
@@ -188,8 +209,16 @@ router.get("/logout", async (req, res) => {
 }
 );
 
-router.post("/resetrequest", async (req, res) => {
-  const email = req.body.email;
+router.post("/resetrequest",[
+  body('email').trim().notEmpty().withMessage("Email is required")
+  .isEmail().withMessage("Invalid Email").normalizeEmail()
+], 
+async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  const email = xss(req.body.email);
   const ot = otpGenerator.generate(6, {
     upperCaseAlphabets: false,
     specialChars: false,
@@ -211,9 +240,18 @@ router.post("/resetrequest", async (req, res) => {
     }
   }
 });
-router.post("/resetpassword", async (req, res) => {
-  const rotp = req.body.otp;
-  const password = req.body.password;
+router.post("/resetpassword",[
+  body('otp').trim().notEmpty().withMessage("otp is required")
+  .isLength({ min: 6, max: 6 }).withMessage("otp must be 6 digits"),
+  body('password').trim().notEmpty().withMessage("password is required")
+  .isLength({ min: 8 }).withMessage("password must be 8 characters long")
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+  const rotp = xss(req.body.otp);
+  const password = xss(req.body.password);
   const isotp = await otp.findOne({
     where: { otp: rotp },
     having: literal("TIMESTAMPDIFF(MINUTE, createdAt, NOW()) <= 5"),
@@ -257,7 +295,7 @@ router.get("/users",adminauth,async(req,res)=>{
   }
 })
 router.post("/deleteuser/:id",adminauth,async(req,res)=>{
-  const id=req.params.id
+  const id=xss(req.params.id)
   try{
     const isuser=await getuserbyid(id)
     if(isuser!=null){

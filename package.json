@@ -16,6 +16,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
+    "express-validator": "^7.2.1",
     "googleapis": "^148.0.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.2",
@@ -24,6 +25,7 @@
     "nodemon": "^3.1.9",
     "otp-generator": "^4.0.1",
     "sequelize": "^6.37.7",
-    "tourism_backend": "file:"
+    "tourism_backend": "file:",
+    "xss": "^1.0.15"
   }
 }
