@@ -43,7 +43,8 @@ router.post("/register", [body('first_name').trim().notEmpty().withMessage("Firs
   }
   const isuser = await getuser(req.body.email);
   if (isuser === null) {
-    const us = user.create({
+    try {
+      const us = await user.create({
       first_name: xss(req.body.first_name),
       last_name: xss(req.body.last_name),
       email: xss(req.body.email),
@@ -54,7 +55,7 @@ router.post("/register", [body('first_name').trim().notEmpty().withMessage("Firs
       upperCaseAlphabets: false,
       specialChars: false,
     });
-    const otp1 = otp.create({
+    const otp1 = await otp.create({
       otp: ot,
       email: req.body.email,
     });
@@ -65,8 +66,13 @@ router.post("/register", [body('first_name').trim().notEmpty().withMessage("Firs
       text: "Verification Link", // plain text body
       html: `<a href=${link}>Click here</a>`, // html body
     });
-
     res.status(200).json({ message: "user created successfully" });
+      
+    } catch (error) {
+        console.error("Registration error:", error);
+        return res.status(500).json({ message: "Registration failed due to server error" });
+    }
+    
   } else {
     res.status(400).json({ message: "user already exist" });
     console.log(isuser.email);
