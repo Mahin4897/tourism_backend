@@ -7,7 +7,7 @@ require("dotenv").config();
 const body_parser = require("body-parser");
 const { body, validationResult } = require('express-validator');
 const xss = require('xss');
-const { user, token, otp } = require("../database/db");
+const { sequelizedb,user, token, otp } = require("../database/db");
 const { getuser, gettoken, getotp , getuserbyid,getallusers,getvalidusers} = require("../functions/dbqueries");
 const { accesstoken, refreshtoken, auth,adminauth } = require("../middleware/auth");
 const otpGenerator = require("otp-generator");
@@ -28,56 +28,107 @@ router.use(cookieParser());
  * @param {string} req.body.phone - User's phone number
  * @returns {Object} 200 status with success message if user created, 400 status if user already exists
  */
-router.post("/register", [body('first_name').trim().notEmpty().withMessage("First Name Required")
-  .isLength({ min: 3 }).withMessage("First Name must be at least 3 characters long"),
-  body('last_name').trim().notEmpty().withMessage("Last Name Required")
-  .isLength({ min: 3 }).withMessage("Last Name must be at least 3 characters long"),
-  body('email').trim().notEmpty().withMessage("Email Required").isEmail().withMessage("Invalid Email").normalizeEmail(),
-  body('password').isLength({ min: 8 }).withMessage("Password must be at least 8 characters long"),
-  body('phone').trim().notEmpty().withMessage("Phone Number Required")
-  .isMobilePhone('bn-BD').withMessage("Invalid Phone Number")
-],async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-  const isuser = await getuser(req.body.email);
-  if (isuser === null) {
-    try {
-      const us = await user.create({
-      first_name: xss(req.body.first_name),
-      last_name: xss(req.body.last_name),
-      email: xss(req.body.email),
-      password: bcrypt.hashSync(xss(req.body.password), 10),
-      phone: xss(req.body.phone),
-    });
-    const ot = otpGenerator.generate(6, {
-      upperCaseAlphabets: false,
-      specialChars: false,
-    });
-    const otp1 = await otp.create({
-      otp: ot,
-      email: req.body.email,
-    });
-    const link = `localhost:3000/verify/${ot}`;
-    const info = await transporter.sendMail({
-      to: req.body.email, // list of receivers
-      subject: "Verify your Email", // Subject line
-      text: "Verification Link", // plain text body
-      html: `<a href=${link}>Click here</a>`, // html body
-    });
-    res.status(200).json({ message: "user created successfully" });
-      
-    } catch (error) {
-        console.error("Registration error:", error);
-        return res.status(500).json({ message: "Registration failed due to server error" });
+router.post(
+  "/register",
+  [
+    body("first_name")
+      .trim()
+      .notEmpty()
+      .withMessage("First Name Required")
+      .isLength({ min: 3 })
+      .withMessage("First Name must be at least 3 characters long"),
+    body("last_name")
+      .trim()
+      .notEmpty()
+      .withMessage("Last Name Required")
+      .isLength({ min: 3 })
+      .withMessage("Last Name must be at least 3 characters long"),
+    body("email")
+      .trim()
+      .notEmpty()
+      .withMessage("Email Required")
+      .isEmail()
+      .withMessage("Invalid Email")
+      .normalizeEmail(),
+    body("password")
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters long"),
+    body("phone")
+      .trim()
+      .notEmpty()
+      .withMessage("Phone Number Required")
+      .isMobilePhone("bn-BD")
+      .withMessage("Invalid Phone Number"),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
-    
-  } else {
-    res.status(400).json({ message: "user already exist" });
-    console.log(isuser.email);
+    const isuser = await getuser(req.body.email);
+    const t = await sequelizedb.transaction();
+    if (isuser === null) {
+      try {
+        
+        const us = await user.create(
+          {
+            first_name: xss(req.body.first_name),
+            last_name: xss(req.body.last_name),
+            email: xss(req.body.email),
+            password: bcrypt.hashSync(xss(req.body.password), 10),
+            phone: xss(req.body.phone),
+          },
+          { transaction: t }
+        );
+        const ot = otpGenerator.generate(6, {
+          upperCaseAlphabets: false,
+          specialChars: false,
+        });
+        const otp1 = await otp.create(
+          {
+            otp: ot,
+            email: xss(req.body.email),
+          },
+          { transaction: t }
+        );
+        await t.commit();
+        const link = `${process.env.BASE_URL}/verify/${ot}`;
+        try {
+          const info = await transporter.sendMail({
+            to: req.body.email, // list of receivers
+            subject: "Verify your Email", // Subject line
+            text: "Verification Link", // plain text body
+            html: `
+  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2>Verify Your Email Address</h2>
+    <p>Thank you for registering. Please click the button below to verify your email address:</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${link}" style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px;">Verify Email</a>
+    </div>
+    <p>If you didn't create an account, you can ignore this email.</p>
+    <p>This link will expire in 1 hour.</p>
+  </div>
+`, // html body
+          });
+          res.status(200).json({ message: "user created successfully" });
+        } catch (error) {
+          console.error("Email sending error:", error);
+          return res.status(500).json({ message: "Email sending failed" });
+        }
+      } catch (error) {
+        console.error("Registration error:", error);
+        await t.rollback();
+        return res
+          .status(500)
+          .json({ message: "Registration failed due to server error" });
+        
+      }
+    } else {
+      res.status(400).json({ message: "user already exist" });
+      console.error("User already exists");
+    }
   }
-});
+);
 
 
 /**
